@@ -132,7 +132,7 @@ function install_dx_stream()
 
 function install_dx_fw()
 {
-    if [ ! -f "$SCRIPT_DIR/dx_fw/m1a/latest/mdot2/fw.bin" ]; then
+    if [ ! -f "$SCRIPT_DIR/dx_fw/m1/latest/mdot2/fw.bin" ]; then
         echo "Error: firmware file not found!"
         exit 1
     fi
@@ -140,8 +140,8 @@ function install_dx_fw()
         echo "Error: 'dxrt-cli' not found!"
         exit 1
     fi
-    dxrt-cli -g $SCRIPT_DIR/dx_fw/m1a/latest/mdot2/fw.bin
-    dxrt-cli -u $SCRIPT_DIR/dx_fw/m1a/latest/mdot2/fw.bin -u reset
+    dxrt-cli -g $SCRIPT_DIR/dx_fw/m1/latest/mdot2/fw.bin
+    dxrt-cli -u $SCRIPT_DIR/dx_fw/m1/latest/mdot2/fw.bin
     echo "It is recommended to power off completely and reboot after the firmware update."
 }
 
