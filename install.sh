@@ -4,6 +4,9 @@ RUNTIME_PATH=$(realpath -s "${SCRIPT_DIR}")
 VENV_PATH="${RUNTIME_PATH}/venv-dx-runtime"
 RT_PATH="${RUNTIME_PATH}/dx_rt"
 
+# Global variables for script configuration
+MIN_PY_VERSION="3.8.10"
+
 # color env settings
 source ${RUNTIME_PATH}/scripts/color_env.sh
 
@@ -17,7 +20,6 @@ function show_help()
     echo "  --all                        : Install all dx-runtime modules (without firmware)"
     echo "  --target=<module_name>       : Install specify target dx-runtime module (ex> dx_fw | dx_rt_npu_linux_driver | dx_rt | dx_app | dx_stream)"
     echo "  [--use-ort=<y|n>]            : set 'USE_ORT' build option to 'ON or OFF' (default: y)"
-    echo "  [--compiled-ver-check=<y|n>] : Check whether the model file (*.dxnn) was compiled with a supported compiler version (default: y)"
     echo "  [--help]                     : Show this help message"
 
     if [ "$1" == "error" ] && [[ ! -n "$2" ]]; then
@@ -72,28 +74,10 @@ function set_use_ort()
     popd
 }
 
-function set_compiled_version_check()
-{
-    pushd ${RUNTIME_PATH}/dx_rt
-    if [ "${USE_COMPILED_VERSION_CHECK}" = "n" ]; then
-        TARGET_FILE="lib/inference_engine.cpp" && \
-        sed -i '/^[[:space:]]*if ( !isSupporterModelVersion(version_str) )/s/^/\/\//' "$TARGET_FILE" && \
-        sed -i '/^[[:space:]]*throw InvalidModelException(std::string("Unsupported compiler version/s/^/\/\//' "$TARGET_FILE" && \
-        echo -e "${TAG_INFO} The '--compiled-ver-check' option is set to 'n'. So, disable related logic in 'dx_rt/$TARGET_FILE'"
-    else
-        TARGET_FILE="lib/inference_engine.cpp" && \
-        sed -i '/^\/\/[[:space:]]*if ( !isSupporterModelVersion(version_str) )/s/^[[:space:]]*\/\///' "$TARGET_FILE" && \
-        sed -i '/^\/\/[[:space:]]*throw InvalidModelException(std::string("Unsupported compiler version/s/^[[:space:]]*\/\///' "$TARGET_FILE" && \
-        echo -e "${TAG_INFO} The '--compiled-ver-check' option is set to 'y'. So, enable related logic in 'dx_rt/$TARGET_FILE'"
-    fi
-    popd
-}
-
 function install_dx_rt()
 {
     DX_RT_INCLUDED=1
     set_use_ort
-    set_compiled_version_check
 
     pushd $SCRIPT_DIR/dx_rt
     if [ "${USE_ORT}" = "y" ]; then
@@ -101,23 +85,27 @@ function install_dx_rt()
     else
         sudo ./install.sh --dep
     fi
-    sudo ./build.sh --clean
+    ./build.sh --clean
     popd
 }
 
 function install_dx_rt_python_api()
 {
     echo -e "=== Setup 'dx_engine' Python API... ${TAG_START} ==="
-    install_python_venv
-    setup_venv
+    . ${VENV_PATH}/bin/activate && \
+    pushd ${RT_PATH}/python_package && \
+    pip install . && \
+    popd
     echo -e "=== Setup 'dx_engine' Python API... ${TAG_DONE} ==="
 }
 
 function install_dx_app()
 {
+    DX_APP_INCLUDED=1
+
     pushd $SCRIPT_DIR/dx_app
     sudo ./install.sh --all
-    sudo ./build.sh --clean
+    ./build.sh --clean
     popd
 }
 
@@ -125,14 +113,14 @@ function install_dx_stream()
 {
     pushd $SCRIPT_DIR/dx_stream
     sudo ./install.sh
-    sudo ./build.sh --install
+    ./build.sh --install
     # gst-inspect-1.0 dxstream
     popd
 }
 
 function install_dx_fw()
 {
-    if [ ! -f "$SCRIPT_DIR/dx_fw/m1a/latest/mdot2/fw.bin" ]; then
+    if [ ! -f "$SCRIPT_DIR/dx_fw/m1/latest/mdot2/fw.bin" ]; then
         echo "Error: firmware file not found!"
         exit 1
     fi
@@ -140,37 +128,20 @@ function install_dx_fw()
         echo "Error: 'dxrt-cli' not found!"
         exit 1
     fi
-    dxrt-cli -g $SCRIPT_DIR/dx_fw/m1a/latest/mdot2/fw.bin
-    dxrt-cli -u $SCRIPT_DIR/dx_fw/m1a/latest/mdot2/fw.bin -u reset
+    dxrt-cli -g $SCRIPT_DIR/dx_fw/m1/latest/mdot2/fw.bin
+    dxrt-cli -u $SCRIPT_DIR/dx_fw/m1/latest/mdot2/fw.bin
     echo "It is recommended to power off completely and reboot after the firmware update."
 }
 
+function setup_venv() {
+    echo "--- setup python venv... ---"
 
-function install_python_venv() {
-    echo "--- Install python venv... ---" && \
-    sudo apt-get install -y python3 python3-dev python3-venv && \
-    python3 -m venv ${VENV_PATH}
-    . ${VENV_PATH}/bin/activate
-}
-
-function setup_venv()
-{
-    . ${VENV_PATH}/bin/activate && \
-    echo "Upgrade pip wheel setuptools..." && \
-    UBUNTU_VERSION=$(lsb_release -rs) && \
-    echo "*** UBUNTU_VERSION(${UBUNTU_VERSION}) ***" && \
-    if [ "$UBUNTU_VERSION" = "24.04" ]; then \
-      pip install --upgrade setuptools; \
-    elif [ "$UBUNTU_VERSION" = "22.04" ]; then \
-      pip install --upgrade pip wheel setuptools; \
-    elif [ "$UBUNTU_VERSION" = "20.04" ] || [ "$UBUNTU_VERSION" = "18.04" ]; then \
-      pip install --upgrade pip wheel setuptools; \
-    else \
-      echo "Unspported Ubuntu version: $UBUNTU_VERSION" && exit 1; \
-    fi && \
-    pushd ${RT_PATH}/python_package && \
-    pip install . && \
-    popd 
+    ${RUNTIME_PATH}/scripts/install_python_and_venv.sh --venv_path=${VENV_PATH}
+    if [ $? -ne 0 ]; then
+        echo -e "${TAG_ERROR} Python and Virual environment setup failed. Exiting."
+        exit 1
+    fi
+    . ${VENV_PATH}/bin/activate;
 }
 
 function host_reboot() {
@@ -186,7 +157,7 @@ function host_reboot() {
 
 function show_information_message()
 {
-    if [ ${DX_RT_INCLUDED} -eq 1 ]; then
+    if [[ ${DX_RT_INCLUDED} -eq 1 || ${DX_APP_INCLUDED} -eq 1 ]]; then
         echo -e "${TAG_INFO} To activate the virtual environment, run:"
         echo -e "${COLOR_BRIGHT_YELLOW_ON_BLACK}  source ${VENV_PATH}/bin/activate ${COLOR_RESET}"
     fi
@@ -197,6 +168,7 @@ function show_information_message()
 }
 
 DX_RT_INCLUDED=0
+DX_APP_INCLUDED=0
 DX_RT_DRIVER_INCLUDED=0
 
 TARGET_PKG=""
@@ -214,9 +186,6 @@ for i in "$@"; do
             ;;
         --use-ort=*)
             USE_ORT="${1#*=}"
-            ;;
-        --compiled-ver-check=*)
-            USE_COMPILED_VERSION_CHECK="${1#*=}"
             ;;
         --help) 
             show_help
@@ -237,6 +206,7 @@ case $TARGET_PKG in
         ;;
     dx_rt)
         echo -e "Installing dx_rt ${TAG_START}"
+        setup_venv
         install_dx_rt
         install_dx_rt_python_api
         show_information_message
@@ -244,6 +214,8 @@ case $TARGET_PKG in
         ;;
     dx_app)
         echo -e "Installing dx_app ${TAG_START}"
+        setup_venv
+        install_dx_rt_python_api
         install_dx_app
         show_information_message
         echo -e "Installing dx_app ${TAG_END}"
@@ -262,6 +234,7 @@ case $TARGET_PKG in
         ;;
     all)
         echo -e "Installing all runtime modules ${TAG_START}"
+        setup_venv
         install_dx_rt
         install_dx_rt_python_api
         install_dx_app
