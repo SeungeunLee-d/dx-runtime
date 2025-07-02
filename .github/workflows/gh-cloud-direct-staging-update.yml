@@ -1,0 +1,75 @@
+# dx-runtime/.github/workflows/gh-cloud-direct-staging-update.yml
+name: Direct Staging Update and Dispatch
+run-name: Direct staging push to dx-runtime by ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - staging # Trigger on direct pushes to dx-runtime's staging branch
+
+permissions: write-all # Required for tag creation and repository dispatch
+
+env:
+  OWNER: DEEPX-AI
+  REPO: dx-all-suite # Target repository for dispatch
+
+jobs:
+  process_direct_push:
+    runs-on:
+      - self-hosted
+      - sdk
+    steps:
+      - name: Clean Workspace
+        run: |
+          sudo rm -rf ${{ github.workspace }}
+          mkdir -p ${{ github.workspace }}
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.GC_DCI_TOKEN }}
+          ref: staging # Checkout the staging branch
+
+      - name: Extract and Validate Tag
+        id: extract_tag
+        run: |
+          MSG="${{ github.event.head_commit.message }}"
+          # Check if the commit message starts with 'vX.Y.Z+' pattern
+          if echo "$MSG" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+\+'; then
+            TAG_PREFIX=$(echo "$MSG" | cut -d'+' -f1)
+            echo "::notice::Valid tag format found: $TAG_PREFIX"
+            echo "tag_name=$TAG_PREFIX" >> $GITHUB_OUTPUT
+            echo "is_valid_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Invalid tag format (expected vX.Y.Z+*). Skipping tag creation."
+            echo "tag_name=" >> $GITHUB_OUTPUT # Ensure tag_name is empty if not valid
+            echo "is_valid_tag=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Tag
+        # Only create tag if a valid semantic version format was extracted
+        if: steps.extract_tag.outputs.is_valid_tag == 'true'
+        uses: rickstaa/action-create-tag@v1
+        with:
+          tag_exists_error: false # Do not error if tag already exists
+          tag: ${{ steps.extract_tag.outputs.tag_name }}
+          force_push_tag: true # Force push if tag already exists
+          commit_sha: ${{ github.event.head_commit.id }}
+          message: '${{ github.event.head_commit.message }}'
+
+      - name: Dispatch Staging Update to dx-all-suite
+        # This dispatches to dx-all-suite's staging branch when dx-runtime's staging branch is directly pushed.
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GC_DCI_TOKEN }}
+          repository: ${{ env.OWNER }}/${{ env.REPO }}
+          event-type: update-submodule # Use the existing update-submodule event type
+          client-payload: |
+            {
+              "name": "dx-runtime",
+              "sha": "${{ github.sha }}",
+              "ref": "${{ github.ref_name }}",
+              "tag_version": "${{ steps.extract_tag.outputs.tag_name }}"
+            }

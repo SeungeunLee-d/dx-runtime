@@ -1,0 +1,52 @@
+# dx-runtime/.github/workflows/gh-cloud-create-tag-staging.yml
+name: Create Staging Tag
+run-name: Tagging ${{ github.event.client_payload.tag_name }} for ${{ github.event.client_payload.ref }}
+
+on:
+  repository_dispatch:
+    types:
+      - create-staging-tag # Triggered by dx-runtime's gh-cloud-update-submodule.yml
+
+permissions: write-all
+
+jobs:
+  release:
+    name: Tagging and Release
+    runs-on:
+      - self-hosted
+      - sdk
+    timeout-minutes: 20
+    steps:
+      - name: Clean Workspace
+        run: |
+          sudo rm -rf ${{ github.workspace }}
+          mkdir -p ${{ github.workspace }}
+          
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.GC_DCI_TOKEN }}
+          # Checkout the specific commit SHA provided in the payload
+          ref: ${{ github.event.client_payload.commit_sha }}
+
+      - name: Create Tag
+        uses: rickstaa/action-create-tag@v1
+        with:
+          tag_exists_error: false
+          tag: ${{ github.event.client_payload.tag_name }}
+          force_push_tag: true
+          commit_sha: ${{ github.event.client_payload.commit_sha }}
+          message: '${{ github.event.client_payload.full_commit_message }}'
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.event.client_payload.tag_name }}
+          name: ${{ github.event.client_payload.tag_name }} # Use the tag name as release name
+          allowUpdates: false
+          makeLatest: false # Staging tags might not be the "latest" official release
+          draft: true # Create as a draft release
+          body: '${{ github.event.client_payload.full_commit_message }}' # Use the full commit message as release body
+          token: ${{ secrets.GC_DCI_TOKEN }} # Ensure token is passed for release creation

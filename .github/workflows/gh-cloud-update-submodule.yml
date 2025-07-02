@@ -1,46 +1,111 @@
-name: update-submodule
+# dx-runtime/.github/workflows/gh-cloud-update-submodule.yml
+name: Update Submodule
 
 on:
   repository_dispatch:
     types:
       - update-submodule
+      - update-submodule-from-child
 
 permissions: write-all
 
 jobs:
   update-submodule:
-    runs-on: 
+    runs-on:
       - self-hosted
       - sdk
     timeout-minutes: 5
     steps:
-      - name: Clean
+      - name: Clean Workspace
         run: |
-            sudo rm -rf ${{ github.workspace }}
-            mkdir -p ${{ github.workspace }}
+          sudo rm -rf ${{ github.workspace }}
+          mkdir -p ${{ github.workspace }}
 
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.client_payload.parent_ref || github.event.client_payload.ref }}
           submodules: recursive
           fetch-tags: true
           fetch-depth: 0
           token: ${{ secrets.GC_DCI_TOKEN }}
-          ref: ${{ github.event.client_payload.ref }}
 
-      - name: Update submodule
+      - name: Update Submodule
         run: |
-          echo "Update submodule ${{ github.event.client_payload.name }} → ${{ github.event.client_payload.sha }}"
-          cd ${{ github.event.client_payload.name }}
-          git fetch --all && git checkout ${{ github.event.client_payload.sha }}
-          git submodule update --init --recursive
+          SUBMODULE_NAME="${{ github.event.client_payload.submodule_name || github.event.client_payload.name }}"
+          SUBMODULE_SHA="${{ github.event.client_payload.submodule_sha || github.event.client_payload.sha }}"
+          TARGET_BRANCH="${{ github.event.client_payload.parent_ref || github.event.client_payload.ref }}"
+
+          echo "Updating submodule $SUBMODULE_NAME to $SUBMODULE_SHA on $TARGET_BRANCH branch."
+          
+          git checkout $TARGET_BRANCH
+          
+          git submodule set-branch --branch $TARGET_BRANCH $SUBMODULE_NAME
+          git config -f .gitmodules submodule.$SUBMODULE_NAME.url git@github.com:DEEPX-AI/$SUBMODULE_NAME.git
+          git submodule update --init --recursive $SUBMODULE_NAME
+          
+          cd $SUBMODULE_NAME
+          git fetch origin
+          git checkout $SUBMODULE_SHA
+          cd ..
 
       - name: Generate DATE ENV
         run: |
           echo "DATE=$(date +"%Y-%m-%d")" >> $GITHUB_ENV
 
-      - name: Commit Submodule
+      - name: Commit Submodule Changes
+        id: auto_commit # Add an ID to get outputs
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 'ci(${{env.DATE}}): Update ${{ github.event.client_payload.name }}'
-          branch: ${{ github.event.client_payload.ref }}
+          branch: ${{ github.event.client_payload.parent_ref || github.event.client_payload.ref }}
+          commit_message: 'ci(${{env.DATE}}): Update ${{ github.event.client_payload.submodule_name || github.event.client_payload.name }}'
+          commit_options: '--no-verify --allow-empty'
+
+      - name: Dispatch Tag Creation for Staging
+        # 이 디스패치는 dx-runtime의 staging 브랜치에 대한 업데이트가 발생하고
+        # client_payload에 tag_version이 제공되었을 때만 실행됩니다.
+        if: (github.event.client_payload.ref == 'staging' || github.event.client_payload.parent_ref == 'staging') && github.event.client_payload.tag_version != ''
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GC_DCI_TOKEN }}
+          repository: DEEPX-AI/dx-runtime # 자신에게 디스패치
+          event-type: create-staging-tag # 태그 생성을 위한 새로운 이벤트 유형
+          client-payload: |
+            {
+              "full_commit_message": "ci(${{env.DATE}}): Update ${{ github.event.client_payload.submodule_name || github.event.client_payload.name }}",
+              "tag_name": "${{ github.event.client_payload.tag_version }}",
+              "commit_sha": "${{ steps.auto_commit.outputs.commit_sha }}",
+              "ref": "staging" # 태그가 생성될 브랜치
+            }
+
+      - name: Dispatch Staging Update to dx-all-suite
+        # 이 디스패치는 dx-runtime의 staging 브랜치가 업데이트되었을 때 dx-all-suite의 staging 브랜치에 알리기 위함입니다.
+        if: github.event.client_payload.ref == 'staging' || github.event.client_payload.parent_ref == 'staging'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GC_DCI_TOKEN }}
+          repository: DEEPX-AI/dx-all-suite
+          event-type: update-submodule
+          client-payload: |
+            {
+              "name": "dx-runtime",
+              "sha": "${{ github.sha }}",
+              "ref": "staging",
+              "tag_version": "${{ github.event.client_payload.tag_version }}"
+            }
+
+      - name: Dispatch Main Update to dx-all-suite (Only for Main branch propagation)
+        # 이 디스패치는 dx-runtime의 main 브랜치가 업데이트되었을 때 dx-all-suite의 main 브랜치에 알리기 위함입니다.
+        if: github.event.client_payload.parent_ref == 'main'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GC_DCI_TOKEN }}
+          repository: DEEPX-AI/dx-all-suite
+          event-type: update-submodule-from-child
+          client-payload: |
+            {
+              "submodule_name": "dx-runtime",
+              "submodule_sha": "${{ github.sha }}",
+              "submodule_ref": "main",
+              "parent_ref": "main"
+            }
