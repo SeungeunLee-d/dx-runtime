@@ -37,13 +37,12 @@ jobs:
           TARGET_BRANCH="${{ github.event.client_payload.parent_ref || github.event.client_payload.ref }}"
 
           echo "Updating submodule $SUBMODULE_NAME to $SUBMODULE_SHA on $TARGET_BRANCH branch."
-          
+
           git checkout $TARGET_BRANCH
-          
-          git submodule set-branch --branch $TARGET_BRANCH $SUBMODULE_NAME
+
           git config -f .gitmodules submodule.$SUBMODULE_NAME.url git@github.com:DEEPX-AI/$SUBMODULE_NAME.git
           git submodule update --init --recursive $SUBMODULE_NAME
-          
+
           cd $SUBMODULE_NAME
           git fetch origin
           git checkout $SUBMODULE_SHA
@@ -58,8 +57,8 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: ${{ github.event.client_payload.parent_ref || github.event.client_payload.ref }}
-          commit_message: 'ci(${{env.DATE}}): Update ${{ github.event.client_payload.submodule_name || github.event.client_payload.name }}'
-          commit_options: '--no-verify --allow-empty'
+          commit_message: "ci(${{env.DATE}}): Update ${{ github.event.client_payload.submodule_name || github.event.client_payload.name }}"
+          commit_options: "--no-verify --allow-empty"
 
       - name: Dispatch Tag Creation for Staging
         # 이 디스패치는 dx-runtime의 staging 브랜치에 대한 업데이트가 발생하고
