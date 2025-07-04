@@ -1,3 +1,4 @@
+# dx-runtime/.github/workflows/gh-cloud-release-to-main.yml
 name: Release to Main (Recursive)
 run-name: Releasing dx-runtime and submodules to main (Triggered by ${{ github.event.client_payload.parent_sha }})
 
@@ -53,23 +54,34 @@ jobs:
       - name: Merge dx-runtime Staging to Main (Squash)
         if: steps.check_dx_runtime_diff.outputs.has_changes == 'true'
         run: |
+          echo "Pulling latest changes from origin/main before merge..."
+          git pull origin main # 최신 main 브랜치 상태를 가져옴
+
+          echo "Attempting to squash merge origin/staging into main..."
           git merge --squash origin/staging -m "${{ env.LAST_STAGING_COMMIT_MESSAGE }}"
-          git commit -m "${{ env.LAST_STAGING_COMMIT_MESSAGE }}"
-          git push origin main
+
+          # Merge 후 스테이징된 변경 사항이 있는지 확인
+          if git diff --staged --quiet; then
+            echo "::notice::No new changes were staged after squash merge. Skipping commit."
+          else
+            echo "::notice::Changes staged. Proceeding with commit and push."
+            git commit -m "${{ env.LAST_STAGING_COMMIT_MESSAGE }}"
+            git push origin main
+          fi
 
       - name: Recreate Staging Branch for dx-runtime from Main
         if: steps.check_dx_runtime_diff.outputs.has_changes == 'true'
         run: |
           echo "Deleting remote origin/staging branch for dx-runtime..."
           git push origin --delete staging || true
-          
+
           echo "Checking out main branch and pulling latest for dx-runtime..."
           git checkout main
           git pull origin main
-          
+
           echo "Creating new staging branch from main for dx-runtime..."
           git checkout -b staging
-          
+
           echo "Pushing new staging branch to origin for dx-runtime..."
           git push -u origin staging
 
