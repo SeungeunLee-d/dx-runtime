@@ -41,5 +41,5 @@ jobs:
             {
               "name": "dx-runtime",
               "sha": "${{ github.sha }}",
-              "ref": "${{ github.ref_name }}",
+              "ref": "${{ github.ref_name }}"
             }
