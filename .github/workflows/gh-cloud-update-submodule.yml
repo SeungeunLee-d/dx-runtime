@@ -1,4 +1,3 @@
-# dx-runtime/.github/workflows/gh-cloud-update-submodule.yml
 name: Update Submodule
 
 on:
@@ -53,29 +52,12 @@ jobs:
           echo "DATE=$(date +"%Y-%m-%d")" >> $GITHUB_ENV
 
       - name: Commit Submodule Changes
-        id: auto_commit # Add an ID to get outputs
+        id: auto_commit
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: ${{ github.event.client_payload.parent_ref || github.event.client_payload.ref }}
           commit_message: "ci(${{env.DATE}}): Update ${{ github.event.client_payload.submodule_name || github.event.client_payload.name }}"
           commit_options: "--no-verify --allow-empty"
-
-      - name: Dispatch Tag Creation for Staging
-        # 이 디스패치는 dx-runtime의 staging 브랜치에 대한 업데이트가 발생하고
-        # client_payload에 tag_version이 제공되었을 때만 실행됩니다.
-        if: (github.event.client_payload.ref == 'staging' || github.event.client_payload.parent_ref == 'staging') && github.event.client_payload.tag_version != ''
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.GC_DCI_TOKEN }}
-          repository: DEEPX-AI/dx-runtime # 자신에게 디스패치
-          event-type: create-staging-tag # 태그 생성을 위한 새로운 이벤트 유형
-          client-payload: |
-            {
-              "full_commit_message": "ci(${{env.DATE}}): Update ${{ github.event.client_payload.submodule_name || github.event.client_payload.name }}",
-              "tag_name": "${{ github.event.client_payload.tag_version }}",
-              "commit_sha": "${{ steps.auto_commit.outputs.commit_sha }}",
-              "ref": "staging" # 태그가 생성될 브랜치
-            }
 
       - name: Dispatch Staging Update to dx-all-suite
         # 이 디스패치는 dx-runtime의 staging 브랜치가 업데이트되었을 때 dx-all-suite의 staging 브랜치에 알리기 위함입니다.
