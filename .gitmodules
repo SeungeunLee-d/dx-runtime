@@ -1,25 +1,20 @@
 [submodule "dx_stream"]
 	path = dx_stream
 	url = git@github.com:DEEPX-AI/dx_stream.git
-	branch = staging
 	ignore = dirty
 [submodule "dx_rt"]
 	path = dx_rt
 	url = git@github.com:DEEPX-AI/dx_rt.git
-	branch = staging
 	ignore = dirty
 [submodule "dx_rt_npu_linux_driver"]
 	path = dx_rt_npu_linux_driver
 	url = git@github.com:DEEPX-AI/dx_rt_npu_linux_driver.git
-	branch = staging
 	ignore = dirty
 [submodule "dx_app"]
 	path = dx_app
 	url = git@github.com:DEEPX-AI/dx_app.git
-	branch = staging
 	ignore = dirty
 [submodule "dx_fw"]
 	path = dx_fw
 	url = git@github.com:DEEPX-AI/dx_fw.git
-	branch = staging
 	ignore = dirty
