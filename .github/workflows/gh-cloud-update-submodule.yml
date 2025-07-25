@@ -61,7 +61,7 @@ jobs:
 
       - name: Dispatch Staging Update to dx-all-suite
         # 이 디스패치는 dx-runtime의 staging 브랜치가 업데이트되었을 때 dx-all-suite의 staging 브랜치에 알리기 위함입니다.
-        if: steps.auto-commit-action.outputs.changes_detected == 'true' && (github.event.client_payload.ref == 'staging' || github.event.client_payload.parent_ref == 'staging)'
+        if: steps.auto-commit-action.outputs.changes_detected == 'true' && (github.event.client_payload.ref == 'staging' || github.event.client_payload.parent_ref == 'staging')
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.GC_DCI_TOKEN }}
