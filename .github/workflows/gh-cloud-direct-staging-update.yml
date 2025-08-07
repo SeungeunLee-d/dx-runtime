@@ -2,9 +2,10 @@ name: Direct Staging Update and Dispatch
 run-name: Direct staging push to dx-runtime by ${{ github.sha }}
 
 on:
-  push:
-    branches:
-      - staging
+  workflow_dispatch:
+#  push:
+#    branches:
+#      - staging
 
 permissions: write-all
 
