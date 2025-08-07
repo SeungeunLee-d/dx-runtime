@@ -19,10 +19,12 @@ source ${RUNTIME_PATH}/scripts/common_util.sh
 function show_help() {
     print_colored "Usage: $(basename "$0") OPTIONS(--all | --target=<module_name>) [--help]" "YELLOW"
     print_colored "Example 1) $0 --all" "YELLOW"
+    print_colored "Example 1) $0 --all --exclude-fw" "YELLOW"
     print_colored "Example 2) $0 --target=dx_rt_npu_linux_driver" "YELLOW"
     print_colored "Example 3) $0 --target=dx_rt --venv_path=/opt/my_runtime_venv --venv-reuse" "YELLOW"
     print_colored "Options:" "GREEN"
-    print_colored "  --all                          : Install all dx-runtime modules (without firmware)" "GREEN"
+    print_colored "  --all                          : Install all dx-runtime modules" "GREEN"
+    print_colored "  --exclude-fw                   : Install all dx-runtime modules except dx_fw" "GREEN"
     print_colored "  --target=<module_name>         : Install specify target dx-runtime module (ex> dx_fw | dx_rt_npu_linux_driver | dx_rt | dx_app | dx_stream)" "GREEN"
     print_colored "  [--use-ort=<y|n>]              : set 'USE_ORT' build option to 'ON or OFF' (default: y)" "GREEN"
     print_colored "  [--sanity-check=<y|n>]         : turn SanityCheck ON or OFF for dx_rt (default: y)" "GREEN"
@@ -165,17 +167,24 @@ function install_dx_stream() {
 }
 
 function install_dx_fw() {
+    if [ "${EXCLUDE_FW}" = "y" ]; then
+        print_colored_v2 "WARNING" "Excluding firmware update."
+        return
+    fi
+
     if [ ! -f "$SCRIPT_DIR/dx_fw/m1/latest/mdot2/fw.bin" ]; then
-        echo "Error: firmware file not found!"
+        print_colored_v2 "ERROR" "firmware file not found!"
         exit 1
     fi
+
     if ! command -v dxrt-cli &> /dev/null; then
-        echo "Error: 'dxrt-cli' not found!"
+        print_colored_v2 "ERROR" "'dxrt-cli' not found!"
         exit 1
     fi
+
     dxrt-cli -g "$SCRIPT_DIR/dx_fw/m1/latest/mdot2/fw.bin"
     dxrt-cli -u "$SCRIPT_DIR/dx_fw/m1/latest/mdot2/fw.bin"
-    echo "It is recommended to power off completely and reboot after the firmware update."
+    print_colored_v2 "HINT" "It is recommended to power off completely and reboot after the firmware update."
 }
 
 function install_python() {
@@ -234,6 +243,7 @@ DX_APP_INCLUDED=0
 DX_RT_DRIVER_INCLUDED=0
 
 TARGET_PKG=""
+EXCLUDE_FW="n"
 USE_ORT="y"
 USE_SANITY_CHECK="y"
 USE_COMPILED_VERSION_CHECK="y" # This variable is not used in the provided script, kept for consistency.
@@ -249,6 +259,10 @@ for i in "$@"; do
     case "$1" in
         --all)
             TARGET_PKG=all
+            shift # past argument
+            ;;
+        --exclude-fw)
+            EXCLUDE_FW="y"
             shift # past argument
             ;;
         --target=*)
@@ -334,6 +348,7 @@ case $TARGET_PKG in
         install_python # This now calls install_python_and_venv.sh with correct args
         install_dx_rt
         install_dx_rt_python_api
+        install_dx_fw
         install_dx_app
         install_dx_stream
         install_dx_rt_npu_linux_driver
