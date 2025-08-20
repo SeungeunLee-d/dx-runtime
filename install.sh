@@ -29,9 +29,10 @@ function show_help() {
     print_colored "  [--use-ort=<y|n>]              : set 'USE_ORT' build option to 'ON or OFF' (default: y)" "GREEN"
     print_colored "  [--sanity-check=<y|n>]         : turn SanityCheck ON or OFF for dx_rt (default: y)" "GREEN"
     print_colored "  [--driver-source-build]        : build NPU driver from source if set (default: install via DKMS)" "GREEN"
-    print_colored "  [--venv_path=<PATH>]           : Specify the path for the virtual environment (default: ${VENV_PATH_DEFAULT})" "GREEN"
-    print_colored "  [-f, --venv-force-remove]      : Force remove existing virtual environment at --venv_path before creation." "GREEN"
-    print_colored "  [-r, --venv-reuse]             : Reuse existing virtual environment at --venv_path if it's valid, skipping creation." "GREEN"
+    print_colored "  [--venv_path=<PATH>]           : Specify the path for the virtual environment." "GREEN"
+    print_colored "                                   (default: ${VENV_PATH_DEFAULT})" "GREEN"
+    print_colored "    [-f, --venv-force-remove]      - (Default ON) Force remove existing virtual environment at --venv_path before creation." "GREEN"
+    print_colored "    [-r, --venv-reuse]             - (Default OFF) Reuse existing virtual environment at --venv_path if it's valid, skipping creation." "GREEN"
     print_colored "  [--verbose]                    : Enable verbose (debug) logging." "GREEN"
     print_colored "  [--help]                       : Show this help message" "GREEN"
 
@@ -261,7 +262,7 @@ USE_COMPILED_VERSION_CHECK="y" # This variable is not used in the provided scrip
 # variables for venv options
 USE_DRIVER_SOURCE_BUILD="n"
 VENV_PATH_ARG="" # Stores user-provided venv path
-VENV_FORCE_REMOVE="n"
+VENV_FORCE_REMOVE="y"
 VENV_REUSE="n"
 
 # parse args
@@ -336,6 +337,7 @@ case $TARGET_PKG in
     dx_app)
         print_colored "Installing dx_app..." "INFO"
         install_python # This now calls install_python_and_venv.sh with correct args
+        install_dx_rt
         install_dx_rt_python_api
         install_dx_app
         show_information_message
@@ -343,6 +345,7 @@ case $TARGET_PKG in
         ;;
     dx_stream)
         print_colored "Installing dx_stream..." "INFO"
+        install_dx_rt
         install_dx_stream
         show_information_message
         print_colored "[OK] Installing dx_stream" "INFO"
