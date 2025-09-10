@@ -126,7 +126,6 @@ uninstall_dx_rt() {
 
 install_dx_rt() {
     print_colored_v2 "INFO" "=== Installing dx_rt... ==="
-
     uninstall_dx_rt
 
     DX_RT_INCLUDED=1
@@ -238,7 +237,7 @@ install_dx_fw() {
     print_colored_v2 "SUCCESS" "Installing dx_fw completed."
 }
 
-install_python() {
+install_python_and_venv() {
     print_colored_v2 "INFO" "=== install python... ==="
 
     local INSTALL_PY_CMD_ARGS=""
@@ -292,6 +291,25 @@ uninstall_all_runtime_modules() {
     print_colored_v2 "SUCCESS" "Uninstalling all runtime modules completed."
 }
 
+venv_activate() {
+    print_colored_v2 "INFO" "venv activate..."
+    local venv_path="$1"
+
+    if [ -z "$venv_path" ]; then
+        print_colored_v2 "ERROR" "VENV_PATH is not set. Exiting."
+        exit 1
+    fi
+
+    if [ ! -d "$venv_path" ] || [ ! -f "$venv_path/bin/activate" ]; then
+        print_colored_v2 "ERROR" "Virtual environment at '$venv_path' does not exist or is invalid. Please create it first."
+        exit 1
+    fi
+
+    # Activate the virtual environment
+    . "$venv_path/bin/activate" || { print_colored_v2 "ERROR" "Failed to activate virtual environment at '$venv_path'. Exiting."; exit 1; }
+    print_colored_v2 "SUCCESS" "Virtual environment at '$venv_path' is activated."
+}
+
 show_information_message() {
     if [[ ${DX_RT_INCLUDED} -eq 1 || ${DX_APP_INCLUDED} -eq 1 ]]; then
         print_colored "To activate the virtual environment, run:" "HINT"
@@ -312,8 +330,8 @@ main() {
     # Usage: arch_check "supported_arch_names"
     arch_check "amd64 x86_64 arm64 aarch64 armv7l"
 
-    install_python
-    . "${VENV_PATH}/bin/activate" || { print_colored_v2 "ERROR" "venv(${VENV_PATH}) activation failed. Exiting."; exit 1; }
+    install_python_and_venv
+    venv_activate "$VENV_PATH"
 
     case $TARGET_PKG in
         dx_rt_npu_linux_driver)
@@ -325,7 +343,6 @@ main() {
             ;;
         dx_rt)
             print_colored "Installing dx_rt..." "INFO"
-            
             install_dx_rt
             install_dx_rt_python_api
             sanity_check "--dx_rt"
@@ -356,77 +373,16 @@ main() {
         all)
             print_colored "Installing all runtime modules..." "INFO"
             uninstall_all_runtime_modules
+            install_python_and_venv      # venv recreation
+            venv_activate "$VENV_PATH"   # venv reactivate
+
+            install_dx_rt_npu_linux_driver
             install_dx_rt
             install_dx_rt_python_api
             install_dx_fw
             install_dx_app
             install_dx_stream
-            install_dx_rt_npu_linux_driver
             sanity_check
-            show_information_message
-            print_colored "[OK] Installing all runtime modules" "INFO"
-            ;;
-        *)
-            show_help "error" "The '--all' option was not specified, or the '--target' option is invalid. Target packages will not be installed."
-            ;;
-    esac
-}
-
-main() {
-    # this function is defined in scripts/common_util.sh
-    # Usage: os_check "supported_os_names" "ubuntu_versions" "debian_versions"
-    os_check "ubuntu debian" "18.04 20.04 22.04 24.04" "12"
-
-    # this function is defined in scripts/common_util.sh
-    # Usage: arch_check "supported_arch_names"
-    arch_check "amd64 x86_64 arm64 aarch64 armv7l"
-
-    case $TARGET_PKG in
-        dx_rt_npu_linux_driver)
-            print_colored "Installing dx_rt_npu_linux_driver..." "INFO"
-            install_dx_rt_npu_linux_driver
-            show_information_message
-            print_colored "[OK] Installing dx_rt_npu_linux_driver" "INFO"
-            ;;
-        dx_rt)
-            print_colored "Installing dx_rt..." "INFO"
-            install_python
-            install_dx_rt
-            install_dx_rt_python_api
-            show_information_message
-            print_colored "[OK] Installing dx_rt" "INFO"
-            ;;
-        dx_app)
-            print_colored "Installing dx_app..." "INFO"
-            install_python
-            install_dx_rt
-            install_dx_rt_python_api
-            install_dx_app
-            show_information_message
-            print_colored "[OK] Installing dx_app" "INFO"
-            ;;
-        dx_stream)
-            print_colored "Installing dx_stream..." "INFO"
-            install_dx_stream
-            show_information_message
-            print_colored "[OK] Installing dx_stream" "INFO"
-            ;;
-        dx_fw)
-            print_colored "Installing dx_fw..." "INFO"
-            install_dx_fw
-            show_information_message
-            print_colored "[OK] Installing dx_fw" "INFO"
-            ;;
-        all)
-            print_colored "Installing all runtime modules..." "INFO"
-            install_python
-            install_dx_rt
-            install_dx_rt_python_api
-            install_dx_fw
-            install_dx_app
-            install_dx_stream
-            install_dx_rt_npu_linux_driver
-            # sanity_check              # disabled for now, cause: driver is detected after reboot and it's not installed yet.
             show_information_message
             print_colored "[OK] Installing all runtime modules" "INFO"
             ;;
